@@ -1,0 +1,59 @@
+name: Build Offline Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Install Capacitor & Generate Android Project
+        run: |
+          npm install
+          npx cap add android
+          npx cap sync android
+      - name: Configure Permissions & App Icon
+        run: |
+          python3 - << 'PY'
+          import os
+          from PIL import Image
+          mp = 'android/app/src/main/AndroidManifest.xml'
+          m = open(mp, encoding='utf-8').read()
+          for p in [
+              '<uses-permission android:name="android.permission.INTERNET" />',
+              '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
+              '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
+              '<uses-permission android:name="android.permission.WAKE_LOCK" />'
+          ]:
+              if p not in m:
+                  m = m.replace('<application', f'    {p}\n    <application', 1)
+          open(mp, 'w', encoding='utf-8').write(m)
+          if os.path.exists('assets/icon.png'):
+              icon = Image.open('assets/icon.png').convert('RGBA')
+              for d, px in {'mdpi':48,'hdpi':72,'xhdpi':96,'xxhdpi':144,'xxxhdpi':192}.items():
+                  dd = f'android/app/src/main/res/mipmap-{d}'
+                  if os.path.isdir(dd):
+                      r = icon.resize((px, px), Image.Resampling.LANCZOS)
+                      for fn in ['ic_launcher.png','ic_launcher_round.png','ic_launcher_foreground.png']:
+                          fp = os.path.join(dd, fn)
+                          if os.path.exists(fp): r.save(fp, 'PNG')
+          PY
+      - name: Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Qurani-Piroz-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
