@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -24,9 +24,9 @@ jobs:
           npx cap sync android
       - name: Configure Permissions & App Icon
         run: |
+          python3 -m pip install --quiet pillow || true
           python3 - << 'PY'
           import os
-          from PIL import Image
           mp = 'android/app/src/main/AndroidManifest.xml'
           m = open(mp, encoding='utf-8').read()
           for p in [
@@ -38,15 +38,19 @@ jobs:
               if p not in m:
                   m = m.replace('<application', f'    {p}\n    <application', 1)
           open(mp, 'w', encoding='utf-8').write(m)
-          if os.path.exists('assets/icon.png'):
-              icon = Image.open('assets/icon.png').convert('RGBA')
-              for d, px in {'mdpi':48,'hdpi':72,'xhdpi':96,'xxhdpi':144,'xxxhdpi':192}.items():
-                  dd = f'android/app/src/main/res/mipmap-{d}'
-                  if os.path.isdir(dd):
-                      r = icon.resize((px, px), Image.Resampling.LANCZOS)
-                      for fn in ['ic_launcher.png','ic_launcher_round.png','ic_launcher_foreground.png']:
-                          fp = os.path.join(dd, fn)
-                          if os.path.exists(fp): r.save(fp, 'PNG')
+          try:
+              from PIL import Image
+              if os.path.exists('assets/icon.png'):
+                  icon = Image.open('assets/icon.png').convert('RGBA')
+                  for d, px in {'mdpi':48,'hdpi':72,'xhdpi':96,'xxhdpi':144,'xxxhdpi':192}.items():
+                      dd = f'android/app/src/main/res/mipmap-{d}'
+                      if os.path.isdir(dd):
+                          r = icon.resize((px, px), Image.Resampling.LANCZOS)
+                          for fn in ['ic_launcher.png','ic_launcher_round.png','ic_launcher_foreground.png']:
+                              fp = os.path.join(dd, fn)
+                              if os.path.exists(fp): r.save(fp, 'PNG')
+          except Exception as e:
+              print('Icon resize skipped:', e)
           PY
       - name: Build Debug APK
         run: |
